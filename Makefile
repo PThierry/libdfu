@@ -44,6 +44,40 @@ TODEL_CLEAN += $(OBJ)
 TODEL_DISTCLEAN += $(APP_BUILD_DIR)
 
 ##########################################################
+# About Frama-C checks
+##########################################################
+
+SESSION   :=frama-c-rte-val-wp.session
+JOBS      :=$(shell nproc)
+TIMEOUT   :=15
+
+framac:
+		frama-c-gui dfu.c \
+			-cpp-command "gcc -std=c11 -E -C -I. -D__FRAMAC -I$(PROJ_FILES) -I$(PROJ_FILES)/include/generated -I$(PROJ_FILES)/libs/std/api -I$(PROJ_FILES)/drivers/socs/$(SOC)/usb/api" \
+			-warn-left-shift-negative \
+	        -warn-right-shift-negative \
+			-warn-signed-downcast \
+			-warn-signed-overflow \
+			-warn-unsigned-downcast \
+			-warn-unsigned-overflow \
+			-rte \
+		    -eva \
+		    -wp-dynamic \
+		    -eva-slevel 1 \
+			-eva-warn-undefined-pointer-comparison none \
+		    -then \
+		    -wp \
+		    -wp-dynamic \
+		    -wp-par $(JOBS) \
+		    -wp-steps 100000 -wp-depth 100000 -pp-annot \
+		    -wp-split -wp-literals \
+		    -wp-timeout $(TIMEOUT) -save $(SESSION)
+
+framac-gui:
+	frama-c-gui -load $(SESSION)
+
+
+##########################################################
 # generic targets of all libraries makefiles
 ##########################################################
 

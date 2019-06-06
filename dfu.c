@@ -421,6 +421,10 @@ void dfu_set_poll_timeout(uint32_t t, uint64_t timestamp)
 static uint8_t dfu_next_state(dfu_state_enum_t  current_state,
         dfu_request_t    request)
 {
+    /*@
+	  @ loop invariant 0 <= i <= 5;
+	  @ loop assigns i;
+	  @*/
     for (uint8_t i = 0; i < 5; ++i) {
         if (dfu_automaton[current_state].req_trans[i].request == request) {
             return (dfu_automaton[current_state].req_trans[i].target_state);
@@ -1801,3 +1805,21 @@ mbed_error_t dfu_init(uint8_t **buffer,
     usb_driver_init();
     return MBED_ERROR_NONE;
 }
+
+
+#ifdef __FRAMAC
+uint8_t buffer[1024];
+
+int main(void)
+{
+    dfu_early_init();
+    dfu_init(buffer, 1024);
+
+
+    while (1) {
+        dfu_exec_automaton();
+    }
+    return 0;
+}
+
+#endif
