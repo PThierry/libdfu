@@ -84,8 +84,12 @@ static void dfu_usb_driver_setup_read_status(void){
 	return;
 }
 
-static volatile uint32_t read_cnt = 0;
-void dfu_usb_driver_setup_read(void *dst, uint32_t size){
+
+/*@ requires \valid(dst);
+  @ ensures size > 0;
+  @*/
+void dfu_usb_driver_setup_read(void *dst, uint32_t size)
+{
 	while((dfu_usb_read_in_progress == true) || (dfu_usb_write_in_progress == true)){
 #if USB_DFU_DEBUG
 		aprintf_flush();
@@ -94,15 +98,15 @@ void dfu_usb_driver_setup_read(void *dst, uint32_t size){
 	}
 	dfu_usb_read_in_progress = true;
 #if USB_DFU_DEBUG
-	printf("==> READ %d dfu_usb_driver_setup_read %d\n", read_cnt, size);
+	printf("==> READ dfu_usb_driver_setup_read %d\n", size);
 #endif
-	read_cnt++;
 	usb_driver_setup_read(dst, size, 0);
 	return;
 }
 
 
-static void dfu_usb_driver_stall_out(){
+static void dfu_usb_driver_stall_out(void)
+{
 	while((dfu_usb_read_in_progress == true) || (dfu_usb_write_in_progress == true)){
 #if USB_DFU_DEBUG
 		aprintf_flush();
@@ -118,7 +122,8 @@ static void dfu_usb_driver_stall_out(){
 	return;
 }
 
-static void dfu_usb_driver_setup_send_status(int status){
+static void dfu_usb_driver_setup_send_status(int status)
+{
 	while((dfu_usb_read_in_progress == true) || (dfu_usb_write_in_progress == true)){
 #if USB_DFU_DEBUG
 		aprintf_flush();
@@ -134,6 +139,9 @@ static void dfu_usb_driver_setup_send_status(int status){
 	return;
 }
 
+/*@ requires \valid(src);
+  @ ensures \size > 0;
+  @*/
 void dfu_usb_driver_setup_send(const void *src, uint32_t size){
 	while((dfu_usb_read_in_progress == true) || (dfu_usb_write_in_progress == true)){
 #if USB_DFU_DEBUG
@@ -149,7 +157,8 @@ void dfu_usb_driver_setup_send(const void *src, uint32_t size){
 	return;
 }
 
-void dfu_usb_driver_setup_send_zlp(void){
+void dfu_usb_driver_setup_send_zlp(void)
+{
     dfu_usb_driver_setup_send(0,0);
 	dfu_usb_write_in_progress = false;
 }
@@ -348,42 +357,54 @@ static const struct {
  * DFU getters and setters
  *********************************************/
 
-uint32_t dfu_get_poll_timeout(void){
+/*@ assigns \nothing; @*/
+uint32_t dfu_get_poll_timeout(void) {
     return dfu_ctx->poll_timeout_ms;
 }
 
 
+/*@ assigns \nothing;
+  @*/
 static inline uint8_t dfu_get_state() {
     return dfu_ctx->state;
 }
 
+/*@ assigns \nothing;
+  @*/
 static inline uint8_t dfu_get_status() {
     return dfu_ctx->status;
 }
 
+/*@ assigns \nothing;
+  @*/
 uint8_t dfu_get_status_string_id() {
     // TODO
     return 0;
 }
 
+/*@ assigns out_assigns: dfu_ctx->status;
+  @ assert (new_state >= 0 && new_state <= 10);
+  @*/
 static inline void dfu_set_status(const dfu_status_enum_t new_status) {
     dfu_ctx->status = new_status;
 }
 
-
+/*@
+    // new_state must be a valid state from the enumerate
+  @ assert (new_state >= 0 && new_state <= 10); 
+  @*/
 static inline void dfu_set_state(const uint8_t new_state)
 {
-    if (new_state == 0xff) {
-        printf("PANIC! this should never arrise !");
-        while (1) {};
-        return;
-    }
 #if USB_DFU_DEBUG
     printf("state: %x => %x\n", dfu_ctx->state, new_state);
 #endif
     dfu_ctx->state = new_state;
 }
 
+/*@
+  @ assigns out_assigns: dfu_ctx->poll_timeout_ms;
+  @ assigns out_assigns: dfu_ctx->poll_start;
+  @*/
 void dfu_set_poll_timeout(uint32_t t, uint64_t timestamp)
 {
 
@@ -418,6 +439,10 @@ void dfu_set_poll_timeout(uint32_t t, uint64_t timestamp)
  *
  * \return the next state, or 0xff
  */
+/*@
+  @ assert (current_state >= 0 && current_state <= 10); 
+  @ assigns \nothing
+  @*/
 static uint8_t dfu_next_state(dfu_state_enum_t  current_state,
         dfu_request_t    request)
 {
@@ -447,6 +472,10 @@ static uint8_t dfu_next_state(dfu_state_enum_t  current_state,
 static bool dfu_is_valid_transition(dfu_state_enum_t current_state,
         dfu_request_t    request)
 {
+    /*@
+	  @ loop invariant 0 <= i <= 5;
+	  @ loop assigns i;
+	  @*/
     for (uint8_t i = 0; i < 5; ++i) {
         if (dfu_automaton[current_state].req_trans[i].request == request) {
             return true;
@@ -1518,6 +1547,11 @@ static void dfu_release_current_dfu_cmd(request_queue_node_t **current_dfu_cmd)
  * This function dequeue all the events queued in handler
  * mode, respecting the events order.
  *****************************************************/
+/*@ requires \valid(dfu_cmd_queue);
+  @ assigns *dfu_cmd_queue;
+  @ ensures \result > 0 || \result == 0;
+  @ ensures (dfu_cmd_queue_empty  == 1) ==> \result == 0;
+  @*/
 static mbed_error_t dfu_class_execute_request(void)
 {
     request_queue_node_t *current_dfu_cmd_p = NULL;
@@ -1534,8 +1568,9 @@ static mbed_error_t dfu_class_execute_request(void)
     if (queue_dequeue(dfu_cmd_queue, (void**)&current_dfu_cmd_p) != MBED_ERROR_NONE) {
         aprintf("Unable to dequeue command!\n");
         leave_critical_section();
-	return MBED_ERROR_NOSTORAGE;
+	    return MBED_ERROR_NOSTORAGE;
     }
+    /*@ requires \valid(current_dfu_cmd_p); */
     current_dfu_cmd = *current_dfu_cmd_p;
     dfu_release_current_dfu_cmd(&current_dfu_cmd_p);
     if(queue_is_empty(dfu_cmd_queue)) {
@@ -1703,10 +1738,10 @@ mbed_error_t dfu_exec_automaton(void)
     aprintf_flush();
 #endif
 
-    return 0;
+    return MBED_ERROR_NONE;
 
 err:
-    return -1;
+    return MBED_ERROR_UNSUPORTED_CMD;
 }
 
 
@@ -1808,6 +1843,10 @@ mbed_error_t dfu_init(uint8_t **buffer,
 
 
 #ifdef __FRAMAC
+/*
+ * This code is a sample code using as an entrypoint for frama-C analysis. It is included
+ * only in the case of frama-c checks, not in the target library
+ */
 uint8_t buffer[1024];
 
 int main(void)
@@ -1821,5 +1860,4 @@ int main(void)
     }
     return 0;
 }
-
 #endif

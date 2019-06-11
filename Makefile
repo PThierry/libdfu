@@ -53,7 +53,7 @@ TIMEOUT   :=15
 
 framac:
 		frama-c-gui dfu.c \
-			-cpp-command "gcc -std=c11 -E -C -I. -D__FRAMAC -I$(PROJ_FILES) -I$(PROJ_FILES)/include/generated -I$(PROJ_FILES)/libs/std/api -I$(PROJ_FILES)/drivers/socs/$(SOC)/usb/api" \
+			-cpp-command "gcc -std=c11 -E -C -I. -D__FRAMAC -I$(PROJ_FILES) -I$(PROJ_FILES)/kernel/src/C/exported -I$(PROJ_FILES)/include/generated -I$(PROJ_FILES)/libs/std/api -I$(PROJ_FILES)/drivers/socs/$(SOC)/usb/api" \
 			-warn-left-shift-negative \
 	        -warn-right-shift-negative \
 			-warn-signed-downcast \
@@ -69,7 +69,7 @@ framac:
 		    -wp \
 		    -wp-dynamic \
 		    -wp-par $(JOBS) \
-		    -wp-steps 100000 -wp-depth 100000 -pp-annot \
+		    -wp-steps 10000 -wp-depth 10000 -pp-annot \
 		    -wp-split -wp-literals \
 		    -wp-timeout $(TIMEOUT) -save $(SESSION)
 
